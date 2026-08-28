@@ -1,0 +1,43 @@
+---
+export interface Props {
+  date: string; // ISO date string
+  theme?: "light" | "dark";
+}
+
+const { date, theme = "light" } = Astro.props;
+
+const days = Math.floor((Date.now() - new Date(date + "T00:00:00").getTime()) / 86_400_000);
+
+const lead =
+  days <= 1 ? "fresh out of the oven" : days <= 7 ? "still warm" : days <= 30 ? "settling in" : "aging nicely";
+
+const formatted = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(
+  new Date(date + "T00:00:00")
+);
+---
+
+<span class:list={["newest-badge", theme]} title={`newest piece · published ${formatted}`}>
+  {lead} <span class="dot">·</span> updated {formatted}
+</span>
+
+<style>
+  .newest-badge {
+    font-family: "EB Garamond", Georgia, serif;
+    font-size: 0.85rem;
+    font-style: italic;
+    white-space: nowrap;
+  }
+
+  .newest-badge.light {
+    color: #8a8a8a;
+  }
+
+  .newest-badge.dark {
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  .dot {
+    opacity: 0.6;
+    font-style: normal;
+  }
+</style>

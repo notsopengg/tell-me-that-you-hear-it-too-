@@ -1,0 +1,21 @@
+---
+import { pieces } from "../../content/pieces";
+import { getPieceComponent } from "../../lib/pieceRegistry";
+import PieceLayout from "../../layouts/PieceLayout.astro";
+import Nav from "../../components/Nav.astro";
+
+export function getStaticPaths() {
+  return pieces.map((piece) => ({
+    params: { slug: piece.slug },
+    props: { piece },
+  }));
+}
+
+const { piece } = Astro.props;
+const PieceComponent = getPieceComponent(piece.slug);
+---
+
+<PieceLayout title={`${piece.title} — Tell Me That You Hear It Too`}>
+  <Nav theme={piece.navTheme ?? "light"} />
+  <PieceComponent />
+</PieceLayout>

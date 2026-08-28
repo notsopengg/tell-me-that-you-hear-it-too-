@@ -1,0 +1,116 @@
+---
+import NewestBanner from "./NewestBanner.astro";
+import { getNewestPiece } from "../content/pieces";
+
+export interface Props {
+  theme?: "light" | "dark";
+}
+
+const { theme = "light" } = Astro.props;
+const path = Astro.url.pathname;
+const newest = getNewestPiece();
+
+function isActive(href: string) {
+  if (href === "/") return path === "/";
+  return path.startsWith(href);
+}
+---
+
+<nav class:list={["nav", theme]}>
+  <div class="nav-brand">
+    <a href="/" class="nav-title">Tell Me That You Hear It Too</a>
+    <span class="nav-byline">a computational poetry project by Emily Peng</span>
+  </div>
+
+  <div class="nav-right">
+    <div class="nav-links">
+      <a href="/" class:list={{ active: isActive("/") }}>Home</a>
+      <a href="/projects" class:list={{ active: isActive("/projects") }}>Projects</a>
+      <a href="/about" class:list={{ active: isActive("/about") }}>About</a>
+    </div>
+    <NewestBanner date={newest.date} theme={theme} />
+  </div>
+</nav>
+
+<style>
+  .nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1.5rem;
+    padding: 1.1rem 1.5rem;
+  }
+
+  .nav-brand {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.3;
+    min-width: 0;
+  }
+
+  .nav-title {
+    font-family: "Courier New", Courier, monospace;
+    font-size: clamp(1rem, 1.5vw, 1.2rem);
+    font-weight: 700;
+    text-decoration: none;
+    max-width: 70vw;
+  }
+
+  .nav-byline {
+    font-family: "EB Garamond", Georgia, serif;
+    font-style: italic;
+    font-size: clamp(0.82rem, 1.1vw, 0.95rem);
+    max-width: 70vw;
+  }
+
+  .nav-right {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 1.25rem;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 0.85rem;
+  }
+
+  .nav-links a {
+    text-decoration: none;
+    padding-bottom: 2px;
+    border-bottom: 1px solid transparent;
+  }
+
+  .nav-links a:hover,
+  .nav-links a.active {
+    border-bottom-color: currentColor;
+  }
+
+  /* light: nav sits on a light/default background -> dark text */
+  .nav.light .nav-title,
+  .nav.light .nav-links a {
+    color: #141414;
+  }
+
+  .nav.light .nav-byline {
+    color: #6b6b6b;
+  }
+
+  /* dark: nav sits on a dark piece background -> white text */
+  .nav.dark .nav-title,
+  .nav.dark .nav-links a {
+    color: #ffffff;
+  }
+
+  .nav.dark .nav-byline {
+    color: rgba(255, 255, 255, 0.65);
+  }
+</style>

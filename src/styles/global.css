@@ -1,0 +1,48 @@
+/* Shared minimal design system — used ONLY by Nav, Projects, and About.
+   Individual poetry pieces never import this file. */
+
+:root {
+  --color-bg: #ffffff;
+  --color-fg: #141414;
+  --color-muted: #767676;
+  --color-border: #e6e6e6;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-title: "Courier New", Courier, monospace;
+  --font-body: "EB Garamond", Georgia, serif;
+  --nav-height: 5rem;
+  --max-width: 640px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--color-fg);
+  background: var(--color-bg);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+}
+
+.container {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.page {
+  padding-top: calc(var(--nav-height) + 3rem);
+  padding-bottom: 6rem;
+}

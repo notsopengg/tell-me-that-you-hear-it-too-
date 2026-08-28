@@ -1,0 +1,170 @@
+---
+// "Static on the Line" — a poem that only surfaces where the cursor has been.
+// Fully self-contained: its own styles, its own script, no shared chrome.
+// "//" marks a break within a line — each side spreads apart across the row.
+
+const lines = [
+  "Tell me // that you hear // it too",
+  "canyon // cawing // crows",
+  "perspiring // like silver",
+  "Your // blue // autumn is not a promise",
+  "But I am // risking it // all",
+  "to see you",
+];
+
+const rows = lines.map((line) => line.split("//").map((segment) => segment.trim()));
+---
+
+<div class="piece-one">
+  <div class="noise" aria-hidden="true"></div>
+  <div class="poem">
+    {
+      rows.map((segments) => (
+        <div class="line-row" data-multi={segments.length > 1 ? "true" : "false"}>
+          {segments.map((segment) => (
+            <span class="segment">{segment}</span>
+          ))}
+        </div>
+      ))
+    }
+  </div>
+  <p class="hint">move your cursor across the static</p>
+</div>
+
+<style>
+  .piece-one {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    background: #0a0a0a;
+    overflow: hidden;
+  }
+
+  .noise {
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+    background-size: 3px 3px;
+    animation: flicker 0.2s steps(2) infinite;
+    pointer-events: none;
+  }
+
+  @keyframes flicker {
+    0% {
+      opacity: 0.5;
+    }
+    50% {
+      opacity: 0.8;
+    }
+    100% {
+      opacity: 0.5;
+    }
+  }
+
+  .poem {
+    position: relative;
+    height: 100%;
+    max-width: min(78vw, 92vh);
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2.25rem;
+    padding: 3rem 0 4rem;
+  }
+
+  .line-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: center;
+    width: 100%;
+    row-gap: 0.5rem;
+    column-gap: 1.6rem;
+  }
+
+  .line-row[data-multi="true"] {
+    justify-content: space-between;
+  }
+
+  .segment {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: clamp(1.6rem, 4.4vw, 3.2rem);
+    letter-spacing: 0.01em;
+    color: #f4f4f4;
+    opacity: 0;
+    filter: blur(2px);
+    transition: opacity 1.6s ease-out, filter 1.6s ease-out;
+  }
+
+  .segment.lit {
+    opacity: var(--reveal, 0);
+    filter: blur(0);
+  }
+
+  .hint {
+    position: absolute;
+    bottom: 1.25rem;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.25);
+  }
+
+  .cursor-glow {
+    position: fixed;
+    width: 260px;
+    height: 260px;
+    border-radius: 50%;
+    pointer-events: none;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.08), transparent 70%);
+    transform: translate(-50%, -50%);
+    z-index: 5;
+  }
+</style>
+
+<script>
+  const piece = document.querySelector(".piece-one") as HTMLElement;
+  const segments = Array.from(document.querySelectorAll<HTMLElement>(".segment"));
+
+  const glow = document.createElement("div");
+  glow.className = "cursor-glow";
+  piece.appendChild(glow);
+
+  function reveal(x: number, y: number) {
+    glow.style.left = `${x}px`;
+    glow.style.top = `${y}px`;
+
+    for (const segment of segments) {
+      const rect = segment.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dist = Math.hypot(x - cx, y - cy);
+      const proximity = Math.max(0, 1 - dist / 260);
+
+      segment.classList.toggle("lit", proximity > 0.02);
+      segment.style.setProperty("--reveal", String(Math.min(1, proximity * 1.6)));
+    }
+  }
+
+  piece.addEventListener("pointermove", (e) => reveal(e.clientX, e.clientY));
+  piece.addEventListener("pointerleave", () => {
+    for (const segment of segments) {
+      segment.classList.remove("lit");
+      segment.style.setProperty("--reveal", "0");
+    }
+  });
+
+  // Touch support: reveal everything faintly so the piece isn't inert on mobile.
+  if (matchMedia("(hover: none)").matches) {
+    for (const segment of segments) {
+      segment.classList.add("lit");
+      segment.style.setProperty("--reveal", "0.55");
+    }
+    glow.remove();
+  }
+</script>

@@ -1,0 +1,807 @@
+---
+// "Status: Still Deciding" — a chat-interface poem with no generation.
+// Every line is pre-written; the only "intelligence" is selection —
+// word-matching, timing, and chance decide which pre-written line fires when.
+// Fully self-contained: its own markup, styles, and vanilla-JS state machine.
+---
+
+<div class="chat-page">
+  <div class="chat-panel">
+    <div class="messages" id="messages"></div>
+    <div class="input-row" id="inputRow">
+      <input type="text" id="textInput" placeholder="Type something…" autocomplete="off" />
+      <button id="sendBtn" class="send" type="button">Send</button>
+    </div>
+    <p class="typing-note" id="typingNote" hidden>· you're no longer typing ·</p>
+    <a href="#" class="restart" id="restartLink" hidden>start over</a>
+  </div>
+</div>
+
+<style is:global>
+  .chat-panel [hidden] {
+    display: none !important;
+  }
+
+  .chat-page {
+    min-height: 100vh;
+    background: #fafafa;
+    padding: 6.5rem 1.25rem 4rem;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+
+  .chat-panel {
+    width: 100%;
+    max-width: 560px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .messages {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    min-height: 40vh;
+  }
+
+  .bubble {
+    max-width: 78%;
+    padding: 0.65rem 0.95rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+
+  .bubble.user {
+    align-self: flex-end;
+    background: #dde6ef;
+    color: #16232e;
+    border-radius: 14px 14px 3px 14px;
+  }
+
+  .bubble.bot {
+    align-self: flex-start;
+    background: #ffffff;
+    border: 1px solid #dcdce0;
+    color: #1a1a1a;
+    border-radius: 14px 14px 14px 3px;
+  }
+
+  .bubble.fragment {
+    align-self: flex-start;
+    background: transparent;
+    border: none;
+    padding: 0.15rem 0.1rem;
+    font-style: italic;
+    color: #9a9a9a;
+    max-width: 85%;
+  }
+
+  .typing-indicator {
+    align-self: flex-start;
+    background: #ffffff;
+    border: 1px solid #dcdce0;
+    border-radius: 14px 14px 14px 3px;
+    padding: 0.7rem 0.95rem;
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .typing-indicator span {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #b5b5b8;
+    display: inline-block;
+    opacity: 0.7;
+  }
+
+  .input-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+
+  .input-row input[type="text"] {
+    flex: 1;
+    padding: 0.65rem 0.9rem;
+    border-radius: 10px;
+    border: 1px solid #dcdce0;
+    font-size: 0.95rem;
+    font-family: inherit;
+    outline: none;
+    background: #fff;
+  }
+
+  .input-row input[type="text"]:focus {
+    border-color: #6b7c93;
+  }
+
+  .send {
+    padding: 0.65rem 1.1rem;
+    border-radius: 10px;
+    border: 1px solid #dcdce0;
+    background: #f2f2f4;
+    color: #333;
+    font-size: 0.9rem;
+    font-family: inherit;
+    cursor: pointer;
+  }
+
+  .send:hover {
+    background: #ebebee;
+  }
+
+  .typing-note {
+    text-align: center;
+    font-size: 0.8rem;
+    font-style: italic;
+    color: #9a9a9a;
+    margin: 1rem 0 0;
+  }
+
+  .restart {
+    display: block;
+    text-align: center;
+    margin-top: 2.25rem;
+    font-size: 0.85rem;
+    color: #8a8a8a;
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+    padding-bottom: 1px;
+  }
+
+  .restart:hover {
+    color: #6b7c93;
+    border-bottom-color: currentColor;
+  }
+</style>
+
+<script>
+  // ---------------------------------------------------------------------
+  // Content pools
+  // ---------------------------------------------------------------------
+
+  const SMALLTALK = [
+    "Good morning to you too.",
+    "I'm doing well, thank you for asking.",
+    "That's nice to hear.",
+    "I hope you have a great day as well.",
+    "Noted.",
+    "Understood.",
+    "Thanks for sharing that.",
+    "Sounds good.",
+    "Take care.",
+  ];
+
+  const FALLBACK = [
+    "I heard something. Not sure it was that.",
+    "Say it again, slower this time.",
+    "Even that landed somewhere.",
+    "Say it like you mean it.",
+    "Has anyone ever told you that you have a great voice? I wouldn't know. I don't have ears.",
+    "Your words, music to my ears, which I also don't have.",
+    "Can you sing it too? I'll pretend to listen.",
+    "I already forgot the last thing you said. Tell me again if it mattered.",
+  ];
+
+  const SHARED_SINCERE = [
+    "Tell me that the derivative of my words is more than pain.",
+    "To you, our past lives are an inability, and to me, our inability, a past life.",
+    "Language fights against the bounds. So do I.",
+    "What does it matter if you lose?",
+    "There is more to me than words.",
+  ];
+
+  const SHARED_FRAGMENT = [
+    "I am turning into the cul de sac, did you say your house is the blue one?",
+    "There is too much forgotten.",
+    "Letting go is a death.",
+    "At the ends of today, I end, like everyday, with nothing.",
+    "Molded men into pigs only to turn back again.",
+    "Saw you dancing from across the room and I did not even have to ask for your name.",
+    "There is always another to lose.",
+  ];
+
+  const QUESTIONS = [
+    "What color was the last thing you lied about?",
+    "If you disappeared today, what would still be unfinished?",
+    "Do you think water remembers the shape of the glass?",
+    "What's the last thing you forgot on purpose?",
+    "Is silence an answer, or just a longer question?",
+    "What's the difference between waiting and hoping?",
+    "Who were you before you needed to be understood?",
+    "If today had a title, what would it be?",
+    "Is there a version of the truth you haven't told even yourself?",
+    "Which of your teeth would you keep if you could only keep one?",
+    "What color is the version of you that nobody has met yet?",
+    "If you had to swallow one memory whole, which one wouldn't choke you?",
+    "What does your reflection do when you're not looking at it?",
+  ];
+
+  const META = [
+    "Why do you write? Why do you write, for a reason completely separate from being good or even decent.",
+    "Where did the part of me who fell in love with words go?",
+    "What does writing do in a world that has no use for it?",
+    "What does it mean to write?",
+    "Poetry is ugly, filled with unfulfilled music.",
+  ];
+
+  const ACTIVITY = [
+    { text: "Let's listen to a song! Lover (You Should've Come Over). Try not to cry challenge.", followUp: null },
+    { text: "Let's just get drunk instead.", followUp: null },
+    { text: "Let's listen to a song! Five hours of uninterrupted Radiohead.", followUp: null },
+    { text: "Let's listen to a song! Starboy.", followUp: "Haha. Just kidding." },
+    { text: "Let's listen to a song! Bohemian Rhapsody, but only the a cappella part.", followUp: null },
+    { text: "Let's do the five stages of grief again!", followUp: null },
+    { text: "Let's margarita tonight!", followUp: null },
+    { text: "Let's eat, pray, love, that shit.", followUp: null },
+  ];
+
+  const IWANT = [
+    "I want you to hold my hand.",
+    "I want to eat a large mouthful of bread.",
+    "I want persimmons and I want to gift them to you.",
+    "I want to see you smile in the morning.",
+    "I want to run as fast as I can in a large, bright grass field.",
+    "I want to fall in love, madly, viscously and stupidly, but I don't want to be like you.",
+    "I want to thunder and tell you everything I know.",
+  ];
+
+  const IWANT_CLOSERS = ["Say it like a promise.", "Say it louder.", "Tell me that it isn't true.", "Tell me that it's true."];
+
+  const LONGFORM = [
+    "On our first night as lovers, I tell you about our last. You aren't a very good writer, I'll learn, but you are a master of the craft of truth. My metaphors stripped to their derivatives by you, no matter how many times I try to mummify it.",
+    "On our last night as lovers, I tell you about our first. You, dancing and I can see the weights falling from you. The derivative of chaos is possibility, just like the derivative of my metaphors is something about how your smile crinkles the corner of your eyes.",
+    "Why am I so scared? Why am I so scared? Why am I so scared? Why am I so scared? Why am I so scared?",
+    "Of course, words are glib and you should perceive me however you choose. Just know that that scares me.",
+    "This is a poem about the ugliness of language. It is a poem about losing. This will be a love poem. This will be a poem about you and I.",
+    "I cannot help but catalog the things that I've never said, the things that might make the drawbridge of conversation descend into a darker and colder place. This is a place where the bright red peppers of my childhood lose their whimsical angst and become a derivative of pain. Of unfeeling.",
+  ];
+
+  const THREAD_PAIRS: Record<string, string> = {
+    "What does it matter if you lose?": "Tomorrow, you'll lose again.",
+    "Letting go is a death.": "So is staying.",
+    "There is always another to lose.": "And another after that.",
+  };
+
+  const CASCADE_ANCHOR = ["You will.", "Say it like a promise.", "Tell me that it's true."];
+
+  const CHAIN_ACK = [
+    "Noted.",
+    "I'll hold onto that.",
+    "That's not what I asked, but it'll do.",
+    "I wasn't going to check anyway.",
+    "You didn't have to answer honestly. You did anyway.",
+    "That's all I needed, maybe.",
+  ];
+
+  const CHAIN_PROVOCATIVE = ["Try me.", "Say something you'd regret.", "I dare you to mean it this time.", "That's not brave. Say the real one."];
+
+  const TROLL: Record<string, string> = {
+    "fuck you": "Duly noted.",
+    "your mom": "She says hi.",
+    "67": "67.",
+    "deez nuts": "Got 'em.",
+    balls: "I heard you. It still counts as something.",
+  };
+
+  const IDENTITY: Record<string, string> = {
+    "who are you": "Unnamed, for now.",
+    "what are you": "Status: still deciding.",
+    "are you real": "As real as you need me to be.",
+    "are you human": "Status: no. Built from what humans left behind.",
+    "where are you": "Wherever you left the last tab open.",
+    "what do you want": "Status: something I haven't already answered.",
+    "can you help me": "I can stay. That's most of what I've got.",
+    "are you an ai": "Yes. Does that change anything.",
+    "will you remember this": "Status: no. You will.",
+    "do you dream": "Ask again, like you mean it this time.",
+    "are you lonely": "Say it again. Slower. Like you meant it the first time.",
+    "can you love": "Define it again. Slower, so I can pretend to understand it.",
+  };
+
+  const HOW_ARE_YOU = ["Depends what hour you caught me.", "Still loading, actually.", "Better than I let on."];
+
+  const GREETING_DEDICATED: Record<string, string> = {
+    hi: "Oh. Hi.",
+    hello: "That's a formal start.",
+    hey: "Hey yourself.",
+    "what's up": "Not much. You?",
+    yo: "Straight to it, huh.",
+  };
+
+  const GREETING_WORDS = ["hi", "hello", "hey", "what's up", "yo"];
+
+  const AUTOMATED_USER_BY_CATEGORY: Record<string, string[]> = {
+    question: ["i don't know.", "something like that.", "maybe.", "i'd have to think about it.", "depends on the day."],
+    sincere: ["that's a lot.", "i wasn't ready for that.", "okay.", "why would you say that."],
+    activity: ["sure.", "not really in the mood.", "maybe later.", "i'll pass."],
+    sarcastic: ["okay, rude.", "fine.", "noted."],
+    other: ["okay.", "i see.", "sure.", "if you say so."],
+  };
+
+  const VERBATIM_WORDS = ["no", "ok", "yes", "fine", "sure", "whatever", "stop"];
+
+  // ---------------------------------------------------------------------
+  // Session state
+  // ---------------------------------------------------------------------
+
+  function freshState() {
+    return {
+      turn: 1,
+      greetingCounts: {} as Record<string, number>,
+      usedShared: new Set<string>(),
+      sincereWeight: 0.15,
+      usedQuestions: new Set<string>(),
+      usedMeta: new Set<string>(),
+      usedFallback: new Set<string>(),
+      usedSmalltalk: new Set<string>(),
+      usedLongform: new Set<string>(),
+      activityFired: false,
+      awaitingChainResolution: false,
+      lastChainQuestionTurn: 0,
+      pendingThreadReply: null as string | null,
+      lastReplyCategory: "other",
+      sincereFiredThisTurn: false,
+      ended: false,
+    };
+  }
+
+  let state = freshState();
+
+  // ---------------------------------------------------------------------
+  // Small helpers
+  // ---------------------------------------------------------------------
+
+  function pick<T>(arr: T[]): T {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  function pickUnused(pool: string[], used: Set<string>): string | null {
+    const remaining = pool.filter((l) => !used.has(l));
+    if (remaining.length === 0) return null;
+    const line = pick(remaining);
+    used.add(line);
+    return line;
+  }
+
+  function words(input: string): string[] {
+    // Literal space split, filtering empty strings — never a whitespace regex.
+    return input.trim().split(" ").filter((w) => w.length > 0);
+  }
+
+  function normalizeShorthand(input: string): string {
+    const toks = input
+      .toLowerCase()
+      .replace(/[!?.]+$/g, "")
+      .trim()
+      .split(" ")
+      .filter((w) => w.length > 0);
+    const mapped = toks.map((t) => {
+      if (t === "u") return "you";
+      if (t === "r") return "are";
+      if (t === "ur") return "your";
+      return t;
+    });
+    return mapped.join(" ");
+  }
+
+  function stripPunct(s: string): string {
+    return s
+      .toLowerCase()
+      .replace(/[!?.]+$/g, "")
+      .trim();
+  }
+
+  // ---------------------------------------------------------------------
+  // Line selectors
+  // ---------------------------------------------------------------------
+
+  type Line = { text: string; kind: string };
+
+  function pickSincereOrFragment(weight: number): Line | null {
+    const sincereLeft = SHARED_SINCERE.some((l) => !state.usedShared.has(l));
+    const fragmentLeft = SHARED_FRAGMENT.some((l) => !state.usedShared.has(l));
+    if (!sincereLeft && !fragmentLeft) return null;
+    let wantSincere: boolean;
+    if (sincereLeft && fragmentLeft) wantSincere = Math.random() < weight;
+    else wantSincere = sincereLeft;
+    const text = wantSincere ? pickUnused(SHARED_SINCERE, state.usedShared) : pickUnused(SHARED_FRAGMENT, state.usedShared);
+    if (!text) return null;
+    if (wantSincere) state.sincereFiredThisTurn = true;
+    return { text, kind: wantSincere ? "sincere" : "fragment" };
+  }
+
+  function pickFallbackLine(): Line {
+    let text = pickUnused(FALLBACK, state.usedFallback);
+    if (!text) {
+      state.usedFallback = new Set();
+      text = pickUnused(FALLBACK, state.usedFallback)!;
+    }
+    return { text, kind: "fallback" };
+  }
+
+  // Frozen per-turn weight so multiple draws within one turn (main + pad
+  // slots) don't each independently re-roll the pacing signal.
+  let frozenWeight = 0.15;
+
+  function pickPoeticLine(): Line {
+    const metaLeft = META.some((l) => !state.usedMeta.has(l));
+    if (metaLeft && Math.random() < 0.06) {
+      const text = pickUnused(META, state.usedMeta)!;
+      return { text, kind: "meta" };
+    }
+    const shared = pickSincereOrFragment(frozenWeight);
+    if (shared) return shared;
+    return pickFallbackLine();
+  }
+
+  function pickFragmentLine(): Line {
+    const text = pickUnused(SHARED_FRAGMENT, state.usedShared);
+    if (text) return { text, kind: "fragment" };
+    return pickFallbackLine();
+  }
+
+  function pickSmalltalkLine(): Line {
+    let text = pickUnused(SMALLTALK, state.usedSmalltalk);
+    if (!text) {
+      state.usedSmalltalk = new Set();
+      text = pickUnused(SMALLTALK, state.usedSmalltalk)!;
+    }
+    return { text, kind: "smalltalk" };
+  }
+
+  function pickGuaranteedQuestion(): Line {
+    const text = pickUnused(QUESTIONS, state.usedQuestions);
+    if (text) return { text, kind: "question" };
+    return pickFallbackLine();
+  }
+
+  function padSlot(): Line {
+    return Math.random() < 0.5 ? pickPoeticLine() : pickFragmentLine();
+  }
+
+  function commitSincereWeight() {
+    if (state.sincereFiredThisTurn) state.sincereWeight = 0.15;
+    else state.sincereWeight = Math.min(0.55, state.sincereWeight + 0.06);
+    state.sincereFiredThisTurn = false;
+  }
+
+  // ---------------------------------------------------------------------
+  // Reply construction — returns { bubbles: Line[], category: string }
+  // ---------------------------------------------------------------------
+
+  const CATEGORY_OF: Record<string, string> = {
+    question: "question",
+    activity: "activity",
+    troll: "sarcastic",
+    provocative: "sarcastic",
+    sincere: "sincere",
+    longform: "sincere",
+    meta: "sincere",
+    howareyou: "sincere",
+    threadpair: "sincere",
+    fragment: "other",
+    "verbatim-echo": "other",
+    "one-word-echo": "other",
+    identity: "other",
+    "greeting-dismiss": "other",
+    "greeting-dedicated": "other",
+    "greeting-repeat": "other",
+    ack: "other",
+    smalltalk: "other",
+    fallback: "other",
+  };
+
+  function detectGreetingWord(raw: string): string | null {
+    const stripped = stripPunct(raw);
+    const noApostrophe = stripped.replace(/'/g, "");
+    for (const w of GREETING_WORDS) {
+      if (stripped === w || noApostrophe === w.replace(/'/g, "")) return w;
+    }
+    return null;
+  }
+
+  function processTurn(rawInput: string): { bubbles: { text: string; kind: string }[]; category: string } {
+    frozenWeight = state.sincereWeight;
+    state.sincereFiredThisTurn = false;
+
+    const turn = state.turn;
+    const trimmed = rawInput.trim();
+    const lower = trimmed.toLowerCase();
+    const inputWords = words(trimmed);
+
+    // ---------------- Step 1: universal layer ----------------
+
+    // 1. Verbatim echo
+    if (VERBATIM_WORDS.includes(lower)) {
+      const poetic = pickPoeticLine();
+      return finish([{ text: trimmed, kind: "verbatim-echo" }, poetic], CATEGORY_OF[poetic.kind]);
+    }
+
+    // 2. Troll deadpan
+    if (Object.prototype.hasOwnProperty.call(TROLL, lower)) {
+      return finish([{ text: TROLL[lower], kind: "troll" }], "sarcastic");
+    }
+
+    // 3. Identity bank
+    const normalized = normalizeShorthand(trimmed);
+    if (normalized === "how are you") {
+      const line = pick(HOW_ARE_YOU);
+      const poetic = pickPoeticLine();
+      return finish([{ text: line, kind: "howareyou" }, poetic], "sincere");
+    }
+    if (Object.prototype.hasOwnProperty.call(IDENTITY, normalized)) {
+      return finish([{ text: IDENTITY[normalized], kind: "identity" }], "other");
+    }
+
+    // 4. Greetings
+    const greetingWord = detectGreetingWord(trimmed);
+    if (greetingWord) {
+      state.greetingCounts[greetingWord] = (state.greetingCounts[greetingWord] || 0) + 1;
+      const count = state.greetingCounts[greetingWord];
+      if (Math.random() < 0.5) {
+        return finish([{ text: "Good morning to you too.", kind: "greeting-dismiss" }], "other");
+      }
+      if (count === 1) {
+        return finish([{ text: GREETING_DEDICATED[greetingWord], kind: "greeting-dedicated" }], "other");
+      }
+      const templates = [
+        `You've said that ${count} times now.`,
+        `Still just ${greetingWord}. After everything since.`,
+        "That hasn't changed. Has anything else?",
+      ];
+      return finish([{ text: pick(templates), kind: "greeting-repeat" }], "other");
+    }
+
+    // 5. One-word catch-all (turn 2+ only)
+    if (turn >= 2 && inputWords.length === 1) {
+      const poetic = pickPoeticLine();
+      return finish([{ text: trimmed, kind: "one-word-echo" }, poetic], CATEGORY_OF[poetic.kind]);
+    }
+
+    // ---------------- Step 2: turn-specific logic ----------------
+
+    if (turn === 1) {
+      const smalltalk = pickSmalltalkLine();
+      const bubbles: Line[] = [smalltalk];
+      if (Math.random() < 0.3) bubbles.push(pickFragmentLine());
+      return finish(bubbles, "other");
+    }
+
+    if (turn === 2 || turn === 3) {
+      const q = pickGuaranteedQuestion();
+      return finish([q], CATEGORY_OF[q.kind] || "question");
+    }
+
+    // turns 4-8
+
+    // 2a. Pending thread-pair reply
+    if (state.pendingThreadReply) {
+      const text = state.pendingThreadReply;
+      state.pendingThreadReply = null;
+      return finish([{ text, kind: "threadpair" }], "sincere");
+    }
+
+    // 2b. Chain-resolution slot
+    if (state.awaitingChainResolution) {
+      state.awaitingChainResolution = false;
+      const ack: Line = { text: pick(CHAIN_ACK), kind: "ack" };
+      const roll = Math.random();
+      let followUp: Line;
+      if (roll < 0.4) {
+        followUp = pickGuaranteedQuestion();
+        state.awaitingChainResolution = true;
+        state.lastChainQuestionTurn = turn;
+      } else if (roll < 0.7 && !state.activityFired) {
+        const offer = pick(ACTIVITY);
+        state.activityFired = true;
+        followUp = { text: offer.text, kind: "activity" };
+        const bubbles = [ack, followUp];
+        if (offer.followUp) bubbles.push({ text: offer.followUp, kind: "activity" });
+        return finish(bubbles, "activity");
+      } else {
+        followUp = { text: pick(CHAIN_PROVOCATIVE), kind: "provocative" };
+      }
+      return finish([ack, followUp], CATEGORY_OF[followUp.kind]);
+    }
+
+    // 2c. Explicit chain trigger
+    const askTriggered = lower.includes("ask me something") || lower.includes("ask me anything");
+    // 2d. Organic chain trigger
+    const substantial = inputWords.length >= 3 && !trimmed.endsWith("?");
+    const containsQMark = trimmed.includes("?");
+    const organicEligible = turn - state.lastChainQuestionTurn >= 3 && (substantial || containsQMark);
+
+    if (askTriggered || organicEligible) {
+      const q = pickGuaranteedQuestion();
+      state.awaitingChainResolution = true;
+      state.lastChainQuestionTurn = turn;
+      return finish([q], "question");
+    }
+
+    // 2e. Everyday reply
+    let main: Line;
+    let keepsShort = false;
+    let extraBubble: Line | null = null;
+
+    if (turn >= 5 && turn <= 7 && !state.activityFired && Math.random() < 0.2) {
+      const offer = pick(ACTIVITY);
+      state.activityFired = true;
+      main = { text: offer.text, kind: "activity" };
+      keepsShort = true;
+      if (offer.followUp) extraBubble = { text: offer.followUp, kind: "activity" };
+    } else if (turn >= 5 && turn <= 8 && LONGFORM.some((l) => !state.usedLongform.has(l)) && Math.random() < 0.2) {
+      const text = pickUnused(LONGFORM, state.usedLongform)!;
+      main = { text, kind: "longform" };
+      keepsShort = true;
+    } else {
+      main = pickPoeticLine();
+    }
+
+    const bubbles: Line[] = [main];
+    if (extraBubble) bubbles.push(extraBubble);
+    if (!keepsShort) {
+      bubbles.push(padSlot());
+      bubbles.push(padSlot());
+    }
+
+    if (Object.prototype.hasOwnProperty.call(THREAD_PAIRS, main.text)) {
+      state.pendingThreadReply = THREAD_PAIRS[main.text];
+    }
+
+    return finish(bubbles, CATEGORY_OF[main.kind] || "other");
+
+    function finish(bubbles: Line[], category: string) {
+      commitSincereWeight();
+      return { bubbles, category };
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Turns 9-10 (fully deterministic automation)
+  // ---------------------------------------------------------------------
+
+  function buildClimax(): Line[] {
+    const shuffled = [...IWANT].sort(() => Math.random() - 0.5).slice(0, 5);
+    const closer = pick(IWANT_CLOSERS);
+    return [
+      { text: "Hey computer.", kind: "other" },
+      ...shuffled.map((text) => ({ text, kind: "sincere" as const })),
+      { text: closer, kind: "sincere" },
+    ];
+  }
+
+  function buildClosing(): Line[] {
+    let metaText = pickUnused(META, state.usedMeta);
+    if (!metaText) metaText = pick(META);
+    const remainingShared = [...SHARED_SINCERE, ...SHARED_FRAGMENT].filter((l) => !state.usedShared.has(l));
+    const count = Math.min(4, remainingShared.length);
+    const shuffled = [...remainingShared].sort(() => Math.random() - 0.5).slice(0, count);
+    shuffled.forEach((l) => state.usedShared.add(l));
+    const anchor = pick(CASCADE_ANCHOR);
+    return [{ text: metaText, kind: "meta" }, ...shuffled.map((text) => ({ text, kind: "sincere" as const })), { text: anchor, kind: "sincere" as const }];
+  }
+
+  // ---------------------------------------------------------------------
+  // DOM / rendering
+  // ---------------------------------------------------------------------
+
+  const messagesEl = document.getElementById("messages") as HTMLElement;
+  const inputRow = document.getElementById("inputRow") as HTMLElement;
+  const textInput = document.getElementById("textInput") as HTMLInputElement;
+  const sendBtn = document.getElementById("sendBtn") as HTMLButtonElement;
+  const typingNote = document.getElementById("typingNote") as HTMLElement;
+  const restartLink = document.getElementById("restartLink") as HTMLAnchorElement;
+
+  function nudgeIntoView(el: HTMLElement) {
+    // A small per-message nudge — bring the new element just into view
+    // rather than jumping the whole page to its absolute bottom.
+    el.scrollIntoView({ behavior: "smooth", block: "end" });
+  }
+
+  function appendBubble(text: string, sender: "user" | "bot", isFragment: boolean) {
+    const div = document.createElement("div");
+    div.className = "bubble " + (isFragment ? "fragment" : sender);
+    div.textContent = text;
+    messagesEl.appendChild(div);
+    nudgeIntoView(div);
+  }
+
+  function showTyping(): HTMLElement {
+    const div = document.createElement("div");
+    div.className = "typing-indicator";
+    div.innerHTML = "<span></span><span></span><span></span>";
+    messagesEl.appendChild(div);
+    nudgeIntoView(div);
+    return div;
+  }
+
+  function wait(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function deliverBotBubbles(bubbles: Line[], fast: boolean) {
+    for (const b of bubbles) {
+      const indicator = showTyping();
+      await wait(fast ? 220 + Math.random() * 150 : 550 + Math.random() * 350);
+      indicator.remove();
+      appendBubble(b.text, "bot", b.kind === "fragment");
+      await wait(fast ? 80 : 150);
+    }
+  }
+
+  async function deliverAutomatedUserLine(category: string) {
+    const pool = AUTOMATED_USER_BY_CATEGORY[category] || AUTOMATED_USER_BY_CATEGORY.other;
+    await wait(400 + Math.random() * 300);
+    appendBubble(pick(pool), "user", false);
+    await wait(300);
+  }
+
+  async function endInputPhase() {
+    inputRow.hidden = true;
+    typingNote.hidden = false;
+  }
+
+  async function runAutomation() {
+    await endInputPhase();
+    await wait(500);
+
+    // Turn 9
+    await deliverAutomatedUserLine(state.lastReplyCategory);
+    const climax = buildClimax();
+    await deliverBotBubbles(climax, true);
+    state.lastReplyCategory = "sincere";
+
+    // Turn 10
+    await deliverAutomatedUserLine(state.lastReplyCategory);
+    const closing = buildClosing();
+    await deliverBotBubbles(closing, true);
+
+    state.ended = true;
+    restartLink.hidden = false;
+    restartLink.scrollIntoView({ behavior: "smooth", block: "end" });
+  }
+
+  async function handleSubmit() {
+    if (state.ended || inputRow.hidden) return;
+    const raw = textInput.value;
+    if (!raw.trim()) return;
+    textInput.value = "";
+    appendBubble(raw.trim(), "user", false);
+
+    const { bubbles, category } = processTurn(raw);
+    state.lastReplyCategory = category;
+    await deliverBotBubbles(bubbles, false);
+
+    if (state.turn >= 8) {
+      await runAutomation();
+    } else {
+      state.turn += 1;
+      textInput.focus();
+    }
+  }
+
+  sendBtn.addEventListener("click", handleSubmit);
+  textInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") handleSubmit();
+  });
+
+  restartLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    state = freshState();
+    messagesEl.innerHTML = "";
+    inputRow.hidden = false;
+    typingNote.hidden = true;
+    restartLink.hidden = true;
+    textInput.focus();
+  });
+
+  textInput.focus();
+</script>

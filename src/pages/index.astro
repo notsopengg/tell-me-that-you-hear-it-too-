@@ -1,0 +1,17 @@
+---
+// Pinned to a specific piece — this does NOT auto-swap when new pieces are
+// added. To feature a different piece here, update HOME_SLUG in
+// src/content/pieces.ts and change the import below to match.
+import { getHomePiece } from "../content/pieces";
+import { getPieceComponent } from "../lib/pieceRegistry";
+import PieceLayout from "../layouts/PieceLayout.astro";
+import Nav from "../components/Nav.astro";
+
+const home = getHomePiece();
+const HomePiece = getPieceComponent(home.slug);
+---
+
+<PieceLayout title={`${home.title} — Tell Me That You Hear It Too`}>
+  <Nav theme={home.navTheme ?? "light"} />
+  <HomePiece />
+</PieceLayout>

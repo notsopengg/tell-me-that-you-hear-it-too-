@@ -1,0 +1,57 @@
+---
+import SiteLayout from "../layouts/SiteLayout.astro";
+import { getSortedPieces, HOME_SLUG } from "../content/pieces";
+
+const pieces = getSortedPieces().filter((piece) => piece.slug !== HOME_SLUG);
+---
+
+<SiteLayout title="Projects — Tell Me That You Hear It Too">
+  <h1 class="heading">Projects</h1>
+  <ul class="piece-list">
+    {
+      pieces.map((piece) => (
+        <li>
+          <a href={`/pieces/${piece.slug}/`}>{piece.title}</a>
+          <span class="desc"> — {piece.description}</span>
+        </li>
+      ))
+    }
+  </ul>
+</SiteLayout>
+
+<style>
+  .heading {
+    font-family: var(--font-title);
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+  }
+
+  .piece-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .piece-list li {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.95rem;
+  }
+
+  .piece-list a {
+    font-family: var(--font-title);
+    text-decoration: none;
+    font-weight: 700;
+  }
+
+  .piece-list a:hover {
+    text-decoration: underline;
+  }
+
+  .desc {
+    font-family: var(--font-body);
+    font-style: italic;
+    color: var(--color-muted);
+  }
+</style>

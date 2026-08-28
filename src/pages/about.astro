@@ -1,0 +1,233 @@
+---
+import SiteLayout from "../layouts/SiteLayout.astro";
+---
+
+<SiteLayout title="About — Tell Me That You Hear It Too">
+  <article class="about">
+    <header class="intro">
+      <h1 class="sr-only">Emily Peng — "Pengus" — poet — moonlighting as a techie</h1>
+      <h2 class="type-line" aria-hidden="true">
+        <span id="typed"></span><span class="caret">|</span>
+      </h2>
+
+      <div class="subline-row">
+        <p class="subline" id="subline">
+          Also: travel writer // clothing hoarder // mother of cat (Chonkers) // hotpot enthusiast &amp; soup savant
+          // wannabe rockstar // gym-rat // pretentious film bro // enjoyer of long walks // Sichuanese
+        </p>
+        <img class="chonker" id="chonker" src="/images/chonker.png" alt="Chonkers the cat, wearing a bear hood" />
+      </div>
+    </header>
+
+    <div class="essay-block">
+      <p>
+        <strong>"Tell me that you hear it too"</strong> is a line that I've recycled across countless poems over
+        the years. Sometimes, it is an address to the recluse subject of my words. More often, it's a plea to my
+        reader. A question of whether the lines that I've painstakingly drafted have landed in that place where
+        words take on infinite meaning.
+      </p>
+      <p>
+        Lately, as I've been more lost in my writing than ever, <strong>"tell me that you hear it too"</strong> has
+        gone from a question that my poems ask to one that I ask as I write. The doubt of whether anything that I
+        write has any value or meaning haunts me, and I've grown unsure about what I'm trying to say, or if
+        language can even still carry that which is unspeakable.
+      </p>
+      <p>
+        I've always been drawn to unconventional forms, but during my last year of moonlighting in tech, I've
+        become interested in exploring how computation can shape the reception of my work. This website is my
+        playground; a coded representation of my intrusive and unfinished ideas. Each work is shaped by a direct
+        interaction between the words and the reader, so at its final conception, <strong>you are as much the
+        writer of the poem as me.</strong>
+      </p>
+      <p>
+        Maybe these works will finally produce a satisfying answer to my question. More likely, they'll only
+        complicate it further. Either way, I hope you enjoy.
+      </p>
+    </div>
+
+    <div class="links">
+      <a href="https://jaadedrabbit.com/" target="_blank" rel="noopener noreferrer">poetry ↗</a>
+      <a href="https://substack.com/@jadedrabbit" target="_blank" rel="noopener noreferrer">essays ↗</a>
+      <a href="mailto:emilyypengg@gmail.com">email</a>
+    </div>
+
+  </article>
+</SiteLayout>
+
+<style>
+  .about {
+    position: relative;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .intro {
+    margin-bottom: 3.5rem;
+  }
+
+  .type-line {
+    font-family: var(--font-title);
+    font-weight: 700;
+    font-size: clamp(1.15rem, 3vw, 1.7rem);
+    line-height: 1.3;
+    margin: 0 0 1rem;
+  }
+
+  .type-line :global(.pink) {
+    color: hotpink;
+  }
+
+  .type-line :global(.italic-word) {
+    font-style: italic;
+  }
+
+  .caret {
+    display: inline-block;
+    animation: blink 1s step-end infinite;
+  }
+
+  @keyframes blink {
+    50% {
+      opacity: 0;
+    }
+  }
+
+  .subline-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .subline {
+    font-family: var(--font-body);
+    font-style: italic;
+    font-size: 1.05rem;
+    color: var(--color-muted);
+    max-width: 42ch;
+    margin: 0;
+    opacity: 0;
+    transition: opacity 1s ease;
+  }
+
+  .subline.visible {
+    opacity: 1;
+  }
+
+  .chonker {
+    display: block;
+    width: auto;
+    height: 60px;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 1s ease;
+  }
+
+  .chonker.visible {
+    opacity: 1;
+  }
+
+  .essay-block {
+    max-width: 62ch;
+  }
+
+  .essay-block p {
+    font-family: var(--font-body);
+    font-size: 1.15rem;
+    margin: 0 0 1.5rem;
+    color: #333;
+  }
+
+  .essay-block strong {
+    font-weight: 700;
+    color: var(--color-fg);
+  }
+
+  .links {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: 2.5rem;
+    font-family: var(--font-title);
+    font-size: 0.9rem;
+  }
+
+  .links a {
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+  }
+
+  .links a:hover {
+    border-bottom-color: currentColor;
+  }
+</style>
+
+<script>
+  const text = 'Emily Peng // "Pengus" //\npoet // moonlighting as a techie';
+  const typed = document.getElementById("typed") as HTMLElement;
+  const subline = document.getElementById("subline") as HTMLElement;
+  const chonker = document.getElementById("chonker") as HTMLImageElement | null;
+
+  function sizeChonker() {
+    if (!chonker) return;
+    chonker.style.height = subline.getBoundingClientRect().height * 0.975 + "px";
+  }
+  sizeChonker();
+  window.addEventListener("resize", sizeChonker);
+  if ("fonts" in document) (document as any).fonts.ready.then(sizeChonker);
+
+  function findRange(word: string, cls: string) {
+    const start = text.indexOf(word);
+    return start === -1 ? null : { start, end: start + word.length, cls };
+  }
+
+  const styledRanges = [findRange("Pengus", "italic-word"), findRange("poet", "pink"), findRange("techie", "pink")]
+    .filter((r): r is { start: number; end: number; cls: string } => r !== null)
+    .sort((a, b) => a.start - b.start);
+
+  function toHtml(s: string) {
+    return s.replace(/\n/g, "<br>");
+  }
+
+  function renderRevealed(n: number) {
+    let html = "";
+    let pos = 0;
+    for (const { start, end, cls } of styledRanges) {
+      if (pos >= n) break;
+      if (start > pos) {
+        const chunkEnd = Math.min(start, n);
+        html += toHtml(text.slice(pos, chunkEnd));
+        pos = chunkEnd;
+      }
+      if (pos >= n) break;
+      if (pos >= start && pos < end) {
+        const chunkEnd = Math.min(end, n);
+        html += `<span class="${cls}">${toHtml(text.slice(pos, chunkEnd))}</span>`;
+        pos = chunkEnd;
+      }
+    }
+    if (pos < n) html += toHtml(text.slice(pos, n));
+    return html;
+  }
+
+  let i = 0;
+  function tick() {
+    if (i <= text.length) {
+      typed.innerHTML = renderRevealed(i);
+      i++;
+      setTimeout(tick, 32);
+    } else {
+      subline.classList.add("visible");
+      chonker?.classList.add("visible");
+    }
+  }
+  tick();
+</script>
