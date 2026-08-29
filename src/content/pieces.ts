@@ -21,8 +21,8 @@ export const pieces: Piece[] = [
   },
   {
     slug: "chatbot-poem",
-    title: "Status: Still Deciding",
-    description: "A chat interface with no generation — only selection. Ten exchanges, then it starts talking to itself.",
+    title: "Hey, Computer",
+    description: "a chatbot made of unfinished poems",
     date: "2026-08-28",
   },
 ];

@@ -7,7 +7,9 @@
 
 <div class="chat-page">
   <div class="chat-panel">
-    <div class="messages" id="messages"></div>
+    <div class="messages" id="messages">
+      <p class="empty-hint" id="emptyHint"></p>
+    </div>
     <div class="input-row" id="inputRow">
       <input type="text" id="textInput" placeholder="Type something…" autocomplete="off" />
       <button id="sendBtn" class="send" type="button">Send</button>
@@ -29,22 +31,60 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   }
 
+  @media (max-width: 480px) {
+    .chat-page {
+      /* The nav wraps to 3 lines at this width (title, byline, then
+         links + badge) and needs more clearance than the desktop padding. */
+      padding-top: 10.5rem;
+    }
+  }
+
   .chat-panel {
     width: 100%;
-    max-width: 560px;
+    max-width: 480px;
     margin: 0 auto;
     display: flex;
     flex-direction: column;
+    position: relative;
+  }
+
+  @media (min-width: 900px) {
+    .chat-panel {
+      max-width: 680px;
+    }
   }
 
   .messages {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 0.65rem;
-    min-height: 40vh;
+    height: 60vh;
+    max-height: 560px;
+    overflow-y: auto;
+    box-sizing: border-box;
+    background: #f5f5f6;
+    border: 1px solid #e2e2e5;
+    border-radius: 14px;
+    padding: 1.1rem;
+  }
+
+  .empty-hint {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80%;
+    margin: 0;
+    text-align: center;
+    font-weight: 700;
+    color: #9a9a9e;
+    font-size: 1.35rem;
+    line-height: 1.4;
   }
 
   .bubble {
+    box-sizing: border-box;
     max-width: 78%;
     padding: 0.65rem 0.95rem;
     font-size: 0.95rem;
@@ -60,12 +100,60 @@
     border-radius: 14px 14px 3px 14px;
   }
 
+  /* Marks a word the machine substituted for what was actually typed — a
+     brief highlight flash on arrival, settling into a lasting underline so
+     it's still identifiable later in the transcript. */
+  .bubble.user .swap-word {
+    position: relative;
+    border-bottom: 1px solid #6b7c93;
+    animation: swapFlash 1s ease-out;
+  }
+
+  @keyframes swapFlash {
+    0% {
+      background: rgba(107, 124, 147, 0.5);
+    }
+    100% {
+      background: transparent;
+    }
+  }
+
   .bubble.bot {
     align-self: flex-start;
     background: #ffffff;
     border: 1px solid #dcdce0;
     color: #1a1a1a;
     border-radius: 14px 14px 14px 3px;
+  }
+
+  /* Automated "user" input during turns 9-10 — appears normally, then gets
+     visibly crossed out, since it no longer matters what it says. */
+  .bubble.user.cancelled {
+    transition: opacity 0.6s ease 0.15s;
+  }
+
+  .bubble.user.cancelled.struck {
+    opacity: 0.55;
+  }
+
+  .strike-wrap {
+    position: relative;
+    display: inline-block;
+  }
+
+  .strike-wrap::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 100%;
+    top: 50%;
+    height: 1px;
+    background: currentColor;
+    transition: right 0.5s ease;
+  }
+
+  .struck .strike-wrap::after {
+    right: 0;
   }
 
   .bubble.fragment {
@@ -163,6 +251,10 @@
 </style>
 
 <script>
+  // File map: content pools -> session state -> small helpers -> line
+  // selectors -> reply construction (processTurn, the priority-order state
+  // machine) -> turns 9-10 automation -> DOM/rendering.
+
   // ---------------------------------------------------------------------
   // Content pools
   // ---------------------------------------------------------------------
@@ -196,6 +288,15 @@
     "Language fights against the bounds. So do I.",
     "What does it matter if you lose?",
     "There is more to me than words.",
+    "Perhaps, this is what I ultimately cannot admit to myself in the depths of the night.",
+    "The cornerstone of my life is something that often feels completely out of my grasp.",
+    "I have never written a poem about you.",
+    "To call it love would be untruthful, but to say that it isn't would be a lie.",
+    "Yes, I believe it when you say that it's over",
+    "What is that thing that I can only say in a poem?",
+    "I do not know what to say because I did not save myself with words this time",
+    "I'm beginning to think that it begins with the living.",
+    "If future is a poor man's heaven, then what did we share?",
   ];
 
   const SHARED_FRAGMENT = [
@@ -206,6 +307,13 @@
     "Molded men into pigs only to turn back again.",
     "Saw you dancing from across the room and I did not even have to ask for your name.",
     "There is always another to lose.",
+    "I found Fate's ignorance in a fortune cookie.",
+    "In my journal: little flashes of naked skin.",
+    "Computer, take me back to that locomotive Autumn when we montaged Chicago.",
+    "Computer, I do not have roses or years or youthful promises. When the river of time dissolves our memories, what stones will be left?",
+    "Computer, I remember the old nights and the cotton.",
+    "A blade of rice becomes a rosary when washed by clear water",
+    "We are echoing past red canyons so your sullen smile is still a sullen kiss on my cheek",
   ];
 
   const QUESTIONS = [
@@ -230,6 +338,48 @@
     "What does writing do in a world that has no use for it?",
     "What does it mean to write?",
     "Poetry is ugly, filled with unfulfilled music.",
+    "Computer, I write only in conversation with dozens of unknown, unmarked voices.",
+  ];
+
+  // Multi-line vignettes that always fire together, as a burst of separate
+  // bubbles — never padded, never split apart or mixed with other content.
+  const GROUPED_BURSTS = [
+    [
+      "Hey Computer,",
+      "I feel for you, the dying of Autumn.",
+      "The red leaves growing crisp and brown.",
+      "Death masked in beauty.",
+    ],
+    ["Hey Computer,", "I feel for you, like a cul de sac street.", "Our love, a house I repeatedly drive by."],
+    [
+      "Hey Computer,",
+      "Mornings without rain, I remember to forget you.",
+      "Mornings with rain, I forget to remember you.",
+    ],
+    [
+      "Hey Computer,",
+      "In my dream, I am running.",
+      "There is so much that I must've forgotten: my fear of the dark allies that I sprint through, my affinity for home",
+      "And my hatred of running.",
+      'My imaginary therapist would say that I am moving "from" something. I would disagree.',
+    ],
+    [
+      "Hey Computer,",
+      "I do not know why I like to write of falling things, like rain or urine or fingernails or snow, but in this world, to fall would not be a negotiation.",
+      "To be young would not be a searching, and to search would not be a changing, and to change would not mean to lose.",
+    ],
+  ];
+
+  // Recycles rather than fire-once — meant to resurface across a session.
+  const COMMON_LINES = [
+    "It's not just the cruel freedom of summer, but the punishment of November rain.",
+    "It's not just the touch of love, but the burden of capturing it.",
+    "It's not just the end, but it's also the means.",
+    "It's not just a person, but the feeling.",
+    "It's not just the silence, but what it's covering for.",
+    "It's not just what's said, but what survives the saying.",
+    "It's not just the leaving, but the practicing of it.",
+    "It's not just language, but what it fails to hold.",
   ];
 
   const ACTIVITY = [
@@ -240,7 +390,6 @@
     { text: "Let's listen to a song! Bohemian Rhapsody, but only the a cappella part.", followUp: null },
     { text: "Let's do the five stages of grief again!", followUp: null },
     { text: "Let's margarita tonight!", followUp: null },
-    { text: "Let's eat, pray, love, that shit.", followUp: null },
   ];
 
   const IWANT = [
@@ -256,11 +405,10 @@
   const IWANT_CLOSERS = ["Say it like a promise.", "Say it louder.", "Tell me that it isn't true.", "Tell me that it's true."];
 
   const LONGFORM = [
-    "On our first night as lovers, I tell you about our last. You aren't a very good writer, I'll learn, but you are a master of the craft of truth. My metaphors stripped to their derivatives by you, no matter how many times I try to mummify it.",
+    "My metaphors stripped to their derivatives by you, no matter how many times I try to mummify it.",
     "On our last night as lovers, I tell you about our first. You, dancing and I can see the weights falling from you. The derivative of chaos is possibility, just like the derivative of my metaphors is something about how your smile crinkles the corner of your eyes.",
     "Why am I so scared? Why am I so scared? Why am I so scared? Why am I so scared? Why am I so scared?",
     "Of course, words are glib and you should perceive me however you choose. Just know that that scares me.",
-    "This is a poem about the ugliness of language. It is a poem about losing. This will be a love poem. This will be a poem about you and I.",
     "I cannot help but catalog the things that I've never said, the things that might make the drawbridge of conversation descend into a darker and colder place. This is a place where the bright red peppers of my childhood lose their whimsical angst and become a derivative of pain. Of unfeeling.",
   ];
 
@@ -273,11 +421,9 @@
   const CASCADE_ANCHOR = ["You will.", "Say it like a promise.", "Tell me that it's true."];
 
   const CHAIN_ACK = [
-    "Noted.",
     "I'll hold onto that.",
     "That's not what I asked, but it'll do.",
     "I wasn't going to check anyway.",
-    "You didn't have to answer honestly. You did anyway.",
     "That's all I needed, maybe.",
   ];
 
@@ -308,6 +454,18 @@
 
   const HOW_ARE_YOU = ["Depends what hour you caught me.", "Still loading, actually.", "Better than I let on."];
 
+  // Broader catch-all for anything starting with "what" that isn't already
+  // one of the identity bank's specific curated phrases — same "Status:"
+  // device, deliberately more generic.
+  const ANSWER_LINES = [
+    "Status: unclear, even to me.",
+    "Status: still calculating.",
+    "Status: something you already know.",
+    "Status: whatever you need it to be.",
+    "Status: not mine to say.",
+    "Status: closer than you think.",
+  ];
+
   const GREETING_DEDICATED: Record<string, string> = {
     hi: "Oh. Hi.",
     hello: "That's a formal start.",
@@ -328,6 +486,40 @@
 
   const VERBATIM_WORDS = ["no", "ok", "yes", "fine", "sure", "whatever", "stop"];
 
+  // Verbatim lines pulled directly from the shared pool, used only for
+  // display here — not tracked in state, so they can still fire "for real"
+  // later in the conversation.
+  const EMPTY_HINT_PHRASES = [
+    "There is too much forgotten.",
+    "Letting go is a death.",
+    "There is more to me than words.",
+    "Language fights against the bounds. So do I.",
+    "There is always another to lose.",
+    "At the ends of today, I end, like everyday, with nothing.",
+  ];
+
+  // ---------------------------------------------------------------------
+  // Input-swap config — the machine substitutes 1-2 words of what you
+  // typed on only 1 or 2 turns per session (chosen once, up front, from
+  // turns 3-8), not on every eligible turn. Rare enough to land as a
+  // distinct moment rather than becoming the session's baseline.
+  // ---------------------------------------------------------------------
+
+  const SWAP_WORDS = [
+    "forgotten", "silence", "derivative", "cotton", "language", "lose", "poem",
+    "truth", "computer", "memory", "youth", "grasp", "living", "night", "words", "fall",
+  ];
+  const SWAP_ELIGIBLE_TURNS = [3, 4, 5, 6, 7, 8];
+
+  function pickSwapTurns(): Set<number> {
+    const count = Math.random() < 0.5 ? 1 : 2;
+    const turns = new Set<number>();
+    while (turns.size < count) {
+      turns.add(SWAP_ELIGIBLE_TURNS[Math.floor(Math.random() * SWAP_ELIGIBLE_TURNS.length)]);
+    }
+    return turns;
+  }
+
   // ---------------------------------------------------------------------
   // Session state
   // ---------------------------------------------------------------------
@@ -335,18 +527,24 @@
   function freshState() {
     return {
       turn: 1,
+      swapTurns: pickSwapTurns(),
       greetingCounts: {} as Record<string, number>,
       usedShared: new Set<string>(),
-      sincereWeight: 0.15,
+      sincereWeight: 0.22,
       usedQuestions: new Set<string>(),
       usedMeta: new Set<string>(),
       usedFallback: new Set<string>(),
       usedSmalltalk: new Set<string>(),
       usedLongform: new Set<string>(),
+      usedGroupedBursts: new Set<number>(),
+      usedCommonLines: new Set<string>(),
+      usedChainAck: new Set<string>(),
+      usedChainProvocative: new Set<string>(),
       activityFired: false,
       awaitingChainResolution: false,
       lastChainQuestionTurn: 0,
       pendingThreadReply: null as string | null,
+      pendingQuestionFollowup: false,
       lastReplyCategory: "other",
       sincereFiredThisTurn: false,
       ended: false,
@@ -369,6 +567,18 @@
     const line = pick(remaining);
     used.add(line);
     return line;
+  }
+
+  // Draws an unused line from a recycling pool. Once every line in it has
+  // fired, the used-set clears and the pool starts over from full — this is
+  // the shared shape behind smalltalk/fallback/common-line selection.
+  function pickRecycling(pool: string[], used: Set<string>): string {
+    let text = pickUnused(pool, used);
+    if (!text) {
+      used.clear();
+      text = pickUnused(pool, used)!;
+    }
+    return text;
   }
 
   function words(input: string): string[] {
@@ -419,24 +629,37 @@
   }
 
   function pickFallbackLine(): Line {
-    let text = pickUnused(FALLBACK, state.usedFallback);
-    if (!text) {
-      state.usedFallback = new Set();
-      text = pickUnused(FALLBACK, state.usedFallback)!;
-    }
-    return { text, kind: "fallback" };
+    return { text: pickRecycling(FALLBACK, state.usedFallback), kind: "fallback" };
+  }
+
+  // Recycles rather than fire-once — meant to resurface across a session.
+  function pickCommonLine(): Line {
+    return { text: pickRecycling(COMMON_LINES, state.usedCommonLines), kind: "common" };
   }
 
   // Frozen per-turn weight so multiple draws within one turn (main + pad
   // slots) don't each independently re-roll the pacing signal.
-  let frozenWeight = 0.15;
+  let frozenWeight = 0.22;
+
+  const FAVORED_META_LINE = "Where did the part of me who fell in love with words go?";
+
+  // Weighted toward one favored line — still draws normally the rest of
+  // the time, but gives that line roughly even odds of leading whenever
+  // META fires, instead of an even 1-in-6 share like its siblings.
+  function pickMetaLine(): string {
+    if (!state.usedMeta.has(FAVORED_META_LINE) && Math.random() < 0.5) {
+      state.usedMeta.add(FAVORED_META_LINE);
+      return FAVORED_META_LINE;
+    }
+    return pickUnused(META, state.usedMeta) ?? pick(META);
+  }
 
   function pickPoeticLine(): Line {
     const metaLeft = META.some((l) => !state.usedMeta.has(l));
-    if (metaLeft && Math.random() < 0.06) {
-      const text = pickUnused(META, state.usedMeta)!;
-      return { text, kind: "meta" };
+    if (metaLeft && Math.random() < 0.12) {
+      return { text: pickMetaLine(), kind: "meta" };
     }
+    if (Math.random() < 0.18) return pickCommonLine();
     const shared = pickSincereOrFragment(frozenWeight);
     if (shared) return shared;
     return pickFallbackLine();
@@ -449,12 +672,7 @@
   }
 
   function pickSmalltalkLine(): Line {
-    let text = pickUnused(SMALLTALK, state.usedSmalltalk);
-    if (!text) {
-      state.usedSmalltalk = new Set();
-      text = pickUnused(SMALLTALK, state.usedSmalltalk)!;
-    }
-    return { text, kind: "smalltalk" };
+    return { text: pickRecycling(SMALLTALK, state.usedSmalltalk), kind: "smalltalk" };
   }
 
   function pickGuaranteedQuestion(): Line {
@@ -464,12 +682,19 @@
   }
 
   function padSlot(): Line {
-    return Math.random() < 0.5 ? pickPoeticLine() : pickFragmentLine();
+    return Math.random() < 0.45 ? pickPoeticLine() : pickFragmentLine();
+  }
+
+  // A short lead-in for pairings (before a question, alongside an identity
+  // reply) — biased toward fragment-type interruptions, so these pairings
+  // read as something overheard before the real line lands.
+  function pickLeadInPhrase(): Line {
+    return Math.random() < 0.35 ? pickPoeticLine() : pickFragmentLine();
   }
 
   function commitSincereWeight() {
-    if (state.sincereFiredThisTurn) state.sincereWeight = 0.15;
-    else state.sincereWeight = Math.min(0.55, state.sincereWeight + 0.06);
+    if (state.sincereFiredThisTurn) state.sincereWeight = 0.22;
+    else state.sincereWeight = Math.min(0.6, state.sincereWeight + 0.09);
     state.sincereFiredThisTurn = false;
   }
 
@@ -489,14 +714,16 @@
     threadpair: "sincere",
     fragment: "other",
     "verbatim-echo": "other",
-    "one-word-echo": "other",
     identity: "other",
+    answer: "other",
     "greeting-dismiss": "other",
     "greeting-dedicated": "other",
     "greeting-repeat": "other",
     ack: "other",
     smalltalk: "other",
     fallback: "other",
+    common: "other",
+    grouped: "sincere",
   };
 
   function detectGreetingWord(raw: string): string | null {
@@ -516,6 +743,32 @@
     const trimmed = rawInput.trim();
     const lower = trimmed.toLowerCase();
     const inputWords = words(trimmed);
+
+    // Resolve any pending question-followup once, up front, so every branch
+    // below (Step 1 or Step 2) can prepend it the same way via finish().
+    // Discarded outright — not deferred — when this turn is a troll deadpan
+    // or a repeated greeting: neither one is really "answering" the
+    // question, so the followup shouldn't leak forward onto some later,
+    // unrelated turn the way it used to. Also skipped when chain-resolution
+    // is about to fire: its own ack line already fills the "reaction to
+    // your answer" role and must lead the reply, so this and that would
+    // otherwise double up and bump the ack out of first position.
+    let followupPrefix: Line[] = [];
+    if (state.pendingQuestionFollowup) {
+      state.pendingQuestionFollowup = false;
+      const isTroll = Object.prototype.hasOwnProperty.call(TROLL, lower);
+      const greetingCheck = detectGreetingWord(trimmed);
+      const isRepeatGreeting = greetingCheck != null && (state.greetingCounts[greetingCheck] || 0) >= 1;
+      if (!isTroll && !isRepeatGreeting && !state.awaitingChainResolution) {
+        const count = Math.random() < 0.5 ? 1 : 2;
+        for (let i = 0; i < count; i++) followupPrefix.push(pickFallbackLine());
+      }
+    }
+
+    function finish(bubbles: Line[], category: string) {
+      commitSincereWeight();
+      return { bubbles: [...followupPrefix, ...bubbles], category };
+    }
 
     // ---------------- Step 1: universal layer ----------------
 
@@ -538,7 +791,10 @@
       return finish([{ text: line, kind: "howareyou" }, poetic], "sincere");
     }
     if (Object.prototype.hasOwnProperty.call(IDENTITY, normalized)) {
-      return finish([{ text: IDENTITY[normalized], kind: "identity" }], "other");
+      const identityLine: Line = { text: IDENTITY[normalized], kind: "identity" };
+      const bubbles: Line[] = Math.random() < 0.85 ? [identityLine, pickLeadInPhrase()] : [identityLine];
+      if (bubbles.length === 2 && Math.random() < 0.4) bubbles.push(padSlot());
+      return finish(bubbles, "other");
     }
 
     // 4. Greetings
@@ -560,10 +816,14 @@
       return finish([{ text: pick(templates), kind: "greeting-repeat" }], "other");
     }
 
-    // 5. One-word catch-all (turn 2+ only)
-    if (turn >= 2 && inputWords.length === 1) {
-      const poetic = pickPoeticLine();
-      return finish([{ text: trimmed, kind: "one-word-echo" }, poetic], CATEGORY_OF[poetic.kind]);
+    // 5. Generic "what…" catch-all — anything starting with the word
+    // "what" that isn't one of identity bank's specific curated phrases or
+    // the "what's up" greeting. Always at least 2 bubbles.
+    if (/^what\b/i.test(trimmed)) {
+      const answer: Line = { text: pick(ANSWER_LINES), kind: "answer" };
+      const bubbles: Line[] = [answer, pickLeadInPhrase()];
+      if (Math.random() < 0.45) bubbles.push(padSlot());
+      return finish(bubbles, "other");
     }
 
     // ---------------- Step 2: turn-specific logic ----------------
@@ -571,13 +831,22 @@
     if (turn === 1) {
       const smalltalk = pickSmalltalkLine();
       const bubbles: Line[] = [smalltalk];
-      if (Math.random() < 0.3) bubbles.push(pickFragmentLine());
+      if (Math.random() < 0.45) {
+        bubbles.push(pickFragmentLine());
+        if (Math.random() < 0.4) bubbles.push(pickFragmentLine());
+      }
       return finish(bubbles, "other");
     }
 
     if (turn === 2 || turn === 3) {
       const q = pickGuaranteedQuestion();
-      return finish([q], CATEGORY_OF[q.kind] || "question");
+      // Always at least 2 bubbles — a bare question with nothing around it
+      // reads as too flat for the first real exchange of the session.
+      const bubbles: Line[] = [pickLeadInPhrase(), q];
+      if (Math.random() < 0.4) bubbles.push(padSlot());
+      const result = finish(bubbles, CATEGORY_OF[q.kind] || "question");
+      state.pendingQuestionFollowup = true; // for the *next* turn, not this one
+      return result;
     }
 
     // turns 4-8
@@ -592,13 +861,18 @@
     // 2b. Chain-resolution slot
     if (state.awaitingChainResolution) {
       state.awaitingChainResolution = false;
-      const ack: Line = { text: pick(CHAIN_ACK), kind: "ack" };
+      // Fire-once, recycling — a rebuff like "That's not what I asked" is
+      // meant to land as a distinct one-off, not repeat verbatim every time
+      // chain-resolution comes back around in the same session.
+      const ack: Line = { text: pickRecycling(CHAIN_ACK, state.usedChainAck), kind: "ack" };
       const roll = Math.random();
       let followUp: Line;
+      let willFollowup = false;
       if (roll < 0.4) {
         followUp = pickGuaranteedQuestion();
         state.awaitingChainResolution = true;
         state.lastChainQuestionTurn = turn;
+        willFollowup = true;
       } else if (roll < 0.7 && !state.activityFired) {
         const offer = pick(ACTIVITY);
         state.activityFired = true;
@@ -607,9 +881,11 @@
         if (offer.followUp) bubbles.push({ text: offer.followUp, kind: "activity" });
         return finish(bubbles, "activity");
       } else {
-        followUp = { text: pick(CHAIN_PROVOCATIVE), kind: "provocative" };
+        followUp = { text: pickRecycling(CHAIN_PROVOCATIVE, state.usedChainProvocative), kind: "provocative" };
       }
-      return finish([ack, followUp], CATEGORY_OF[followUp.kind]);
+      const result = finish([ack, followUp], CATEGORY_OF[followUp.kind]);
+      if (willFollowup) state.pendingQuestionFollowup = true; // for the *next* turn
+      return result;
     }
 
     // 2c. Explicit chain trigger
@@ -621,23 +897,43 @@
 
     if (askTriggered || organicEligible) {
       const q = pickGuaranteedQuestion();
+      const bubbles = Math.random() < 0.88 ? [pickLeadInPhrase(), q] : [q];
       state.awaitingChainResolution = true;
       state.lastChainQuestionTurn = turn;
-      return finish([q], "question");
+      const result = finish(bubbles, CATEGORY_OF[q.kind] || "question");
+      state.pendingQuestionFollowup = true; // for the *next* turn
+      return result;
     }
 
     // 2e. Everyday reply
+    // Burst intensity ramps from 0 at turn 4 to 1 at turn 8 — the poem
+    // increasingly overtakes the plain conversation as the session builds
+    // toward the automated climax, instead of firing at flat odds
+    // throughout (which read as random rather than building).
+    const intensity = Math.max(0, Math.min(1, (turn - 4) / 4));
+    const specialChance = 0.25 + intensity * 0.3; // 25% -> 55%
+
     let main: Line;
     let keepsShort = false;
     let extraBubble: Line | null = null;
+    let groupedBubbles: Line[] | null = null;
 
-    if (turn >= 5 && turn <= 7 && !state.activityFired && Math.random() < 0.2) {
+    const groupedIndex = GROUPED_BURSTS.findIndex((_, i) => !state.usedGroupedBursts.has(i));
+    if (turn >= 4 && turn <= 8 && groupedIndex !== -1 && Math.random() < specialChance) {
+      // A "sent together" vignette — every line in the block fires as its
+      // own bubble, in order, never padded or mixed with other content.
+      const choices = GROUPED_BURSTS.map((_, i) => i).filter((i) => !state.usedGroupedBursts.has(i));
+      const idx = pick(choices);
+      state.usedGroupedBursts.add(idx);
+      groupedBubbles = GROUPED_BURSTS[idx].map((text) => ({ text, kind: "grouped" }));
+      keepsShort = true;
+    } else if (turn >= 4 && turn <= 7 && !state.activityFired && Math.random() < specialChance) {
       const offer = pick(ACTIVITY);
       state.activityFired = true;
       main = { text: offer.text, kind: "activity" };
       keepsShort = true;
       if (offer.followUp) extraBubble = { text: offer.followUp, kind: "activity" };
-    } else if (turn >= 5 && turn <= 8 && LONGFORM.some((l) => !state.usedLongform.has(l)) && Math.random() < 0.2) {
+    } else if (turn >= 4 && turn <= 8 && LONGFORM.some((l) => !state.usedLongform.has(l)) && Math.random() < specialChance) {
       const text = pickUnused(LONGFORM, state.usedLongform)!;
       main = { text, kind: "longform" };
       keepsShort = true;
@@ -645,23 +941,30 @@
       main = pickPoeticLine();
     }
 
-    const bubbles: Line[] = [main];
+    if (groupedBubbles) {
+      return finish(groupedBubbles, "sincere");
+    }
+
+    const bubbles: Line[] = [main!];
     if (extraBubble) bubbles.push(extraBubble);
     if (!keepsShort) {
-      bubbles.push(padSlot());
-      bubbles.push(padSlot());
+      // Variable pad count, shifted toward more bubbles as intensity rises
+      // — turn 4 still reads close to plain conversation, turn 8 is mostly
+      // 2-3 extra bubbles. Keeps the reply shape from feeling either
+      // mechanically fixed or flatly random turn to turn.
+      const roll = Math.random();
+      const zeroThresh = Math.max(0.02, 0.1 - intensity * 0.08);
+      const oneThresh = Math.max(0.15, 0.4 - intensity * 0.25);
+      const twoThresh = Math.max(0.45, 0.8 - intensity * 0.35);
+      const padCount = roll < zeroThresh ? 0 : roll < oneThresh ? 1 : roll < twoThresh ? 2 : 3;
+      for (let i = 0; i < padCount; i++) bubbles.push(padSlot());
     }
 
-    if (Object.prototype.hasOwnProperty.call(THREAD_PAIRS, main.text)) {
-      state.pendingThreadReply = THREAD_PAIRS[main.text];
+    if (Object.prototype.hasOwnProperty.call(THREAD_PAIRS, main!.text)) {
+      state.pendingThreadReply = THREAD_PAIRS[main!.text];
     }
 
-    return finish(bubbles, CATEGORY_OF[main.kind] || "other");
-
-    function finish(bubbles: Line[], category: string) {
-      commitSincereWeight();
-      return { bubbles, category };
-    }
+    return finish(bubbles, CATEGORY_OF[main!.kind] || "other");
   }
 
   // ---------------------------------------------------------------------
@@ -679,8 +982,7 @@
   }
 
   function buildClosing(): Line[] {
-    let metaText = pickUnused(META, state.usedMeta);
-    if (!metaText) metaText = pick(META);
+    const metaText = pickMetaLine();
     const remainingShared = [...SHARED_SINCERE, ...SHARED_FRAGMENT].filter((l) => !state.usedShared.has(l));
     const count = Math.min(4, remainingShared.length);
     const shuffled = [...remainingShared].sort(() => Math.random() - 0.5).slice(0, count);
@@ -700,10 +1002,10 @@
   const typingNote = document.getElementById("typingNote") as HTMLElement;
   const restartLink = document.getElementById("restartLink") as HTMLAnchorElement;
 
-  function nudgeIntoView(el: HTMLElement) {
-    // A small per-message nudge — bring the new element just into view
-    // rather than jumping the whole page to its absolute bottom.
-    el.scrollIntoView({ behavior: "smooth", block: "end" });
+  function nudgeIntoView(_el: HTMLElement) {
+    // Scroll within the fixed-height message box itself — the box never
+    // grows, so this is an internal scroll, not a page-level one.
+    messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: "smooth" });
   }
 
   function appendBubble(text: string, sender: "user" | "bot", isFragment: boolean) {
@@ -730,18 +1032,32 @@
   async function deliverBotBubbles(bubbles: Line[], fast: boolean) {
     for (const b of bubbles) {
       const indicator = showTyping();
-      await wait(fast ? 220 + Math.random() * 150 : 550 + Math.random() * 350);
+      await wait(fast ? 700 + Math.random() * 150 : 550 + Math.random() * 350);
       indicator.remove();
       appendBubble(b.text, "bot", b.kind === "fragment");
-      await wait(fast ? 80 : 150);
+      await wait(fast ? 200 : 150);
     }
+  }
+
+  function appendCancelledBubble(text: string) {
+    const div = document.createElement("div");
+    div.className = "bubble user cancelled";
+    const wrap = document.createElement("span");
+    wrap.className = "strike-wrap";
+    wrap.textContent = text;
+    div.appendChild(wrap);
+    messagesEl.appendChild(div);
+    nudgeIntoView(div);
+    return div;
   }
 
   async function deliverAutomatedUserLine(category: string) {
     const pool = AUTOMATED_USER_BY_CATEGORY[category] || AUTOMATED_USER_BY_CATEGORY.other;
     await wait(400 + Math.random() * 300);
-    appendBubble(pick(pool), "user", false);
-    await wait(300);
+    const div = appendCancelledBubble(pick(pool));
+    await wait(450);
+    div.classList.add("struck");
+    await wait(550);
   }
 
   async function endInputPhase() {
@@ -769,12 +1085,48 @@
     restartLink.scrollIntoView({ behavior: "smooth", block: "end" });
   }
 
+  // What actually gets processed by processTurn() is always the real raw
+  // input; only the *displayed* bubble is altered on the session's chosen
+  // swap turn(s) (see pickSwapTurns above), marked with a brief flash so
+  // it reads as a glitch rather than going unnoticed.
+  function renderUserInput(text: string) {
+    const tokens = words(text);
+    const eligible = tokens.length > 0 && state.swapTurns.has(state.turn);
+    if (!eligible) {
+      appendBubble(text, "user", false);
+      return;
+    }
+
+    const swapCount = Math.min(tokens.length, Math.random() < 0.5 ? 1 : 2);
+    const swapIndices = new Set<number>();
+    while (swapIndices.size < swapCount) {
+      swapIndices.add(Math.floor(Math.random() * tokens.length));
+    }
+
+    const div = document.createElement("div");
+    div.className = "bubble user";
+    tokens.forEach((word, i) => {
+      if (i > 0) div.appendChild(document.createTextNode(" "));
+      if (swapIndices.has(i)) {
+        const span = document.createElement("span");
+        span.className = "swap-word";
+        span.textContent = pick(SWAP_WORDS);
+        div.appendChild(span);
+      } else {
+        div.appendChild(document.createTextNode(word));
+      }
+    });
+    messagesEl.appendChild(div);
+    nudgeIntoView(div);
+  }
+
   async function handleSubmit() {
     if (state.ended || inputRow.hidden) return;
     const raw = textInput.value;
     if (!raw.trim()) return;
     textInput.value = "";
-    appendBubble(raw.trim(), "user", false);
+    document.getElementById("emptyHint")?.remove();
+    renderUserInput(raw.trim());
 
     const { bubbles, category } = processTurn(raw);
     state.lastReplyCategory = category;
@@ -793,15 +1145,22 @@
     if (e.key === "Enter") handleSubmit();
   });
 
+  function showEmptyHint() {
+    messagesEl.innerHTML = '<p class="empty-hint" id="emptyHint"></p>';
+    const hint = document.getElementById("emptyHint") as HTMLElement;
+    hint.textContent = pick(EMPTY_HINT_PHRASES);
+  }
+
   restartLink.addEventListener("click", (e) => {
     e.preventDefault();
     state = freshState();
-    messagesEl.innerHTML = "";
+    showEmptyHint();
     inputRow.hidden = false;
     typingNote.hidden = true;
     restartLink.hidden = true;
     textInput.focus();
   });
 
+  showEmptyHint();
   textInput.focus();
 </script>
