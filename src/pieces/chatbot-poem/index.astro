@@ -1121,10 +1121,17 @@
   }
 
   async function handleSubmit() {
-    if (state.ended || inputRow.hidden) return;
+    // Guards against re-entrancy: without this, a fast double-Enter or
+    // double-click while a reply is still being delivered can fire a
+    // second handleSubmit() before state.turn has incremented, corrupting
+    // turn sequencing (duplicate processTurn() calls double-consuming
+    // fire-once pool content, or a turn number getting skipped).
+    if (state.ended || inputRow.hidden || textInput.disabled) return;
     const raw = textInput.value;
     if (!raw.trim()) return;
     textInput.value = "";
+    textInput.disabled = true;
+    sendBtn.disabled = true;
     document.getElementById("emptyHint")?.remove();
     renderUserInput(raw.trim());
 
@@ -1136,6 +1143,8 @@
       await runAutomation();
     } else {
       state.turn += 1;
+      textInput.disabled = false;
+      sendBtn.disabled = false;
       textInput.focus();
     }
   }
@@ -1158,6 +1167,8 @@
     inputRow.hidden = false;
     typingNote.hidden = true;
     restartLink.hidden = true;
+    textInput.disabled = false;
+    sendBtn.disabled = false;
     textInput.focus();
   });
 
