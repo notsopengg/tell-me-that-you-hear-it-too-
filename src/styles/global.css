@@ -46,3 +46,11 @@ a {
   padding-top: calc(var(--nav-height) + 3rem);
   padding-bottom: 6rem;
 }
+
+@media (max-width: 480px) {
+  /* The nav wraps to 3 lines at this width (title, byline, then links +
+     badge) and needs more clearance than --nav-height assumes. */
+  .page {
+    padding-top: 10.5rem;
+  }
+}

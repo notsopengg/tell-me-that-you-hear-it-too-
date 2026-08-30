@@ -113,4 +113,21 @@ function isActive(href: string) {
   .nav.dark .nav-byline {
     color: rgba(255, 255, 255, 0.65);
   }
+
+  @media (max-width: 480px) {
+    /* More breathing room between the wrapped title/byline block and the
+       links + badge block below it. */
+    .nav {
+      gap: 1rem 1.5rem;
+    }
+
+    /* 70vw was sized to avoid colliding with nav-right on the same row —
+       once the brand block wraps onto its own row on mobile, that
+       constraint just forces an unnecessary extra line-wrap in the title
+       itself, which then makes the nav's real height unpredictable. */
+    .nav-title,
+    .nav-byline {
+      max-width: 92vw;
+    }
+  }
 </style>
