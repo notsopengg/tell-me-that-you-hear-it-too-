@@ -35,7 +35,8 @@ const rows = lines.map((line) => line.split("//").map((segment) => segment.trim(
   .piece-one {
     position: relative;
     width: 100vw;
-    height: 100vh;
+    height: 100vh; /* fallback for browsers without dvh support */
+    height: 100dvh; /* avoids mobile Safari clipping content below the fold when its address bar is showing at load */
     background: #0a0a0a;
     overflow: hidden;
   }
@@ -166,5 +167,7 @@ const rows = lines.map((line) => line.split("//").map((segment) => segment.trim(
       segment.style.setProperty("--reveal", "0.55");
     }
     glow.remove();
+    const hint = document.querySelector(".hint");
+    if (hint) hint.textContent = "static clears where you've been";
   }
 </script>
