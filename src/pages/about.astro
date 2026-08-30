@@ -177,7 +177,9 @@ import SiteLayout from "../layouts/SiteLayout.astro";
 </style>
 
 <script>
-  const text = 'Emily Peng // "Pengus" //\npoet // moonlighting as a techie';
+  // Non-breaking spaces around each "//" so it can never wrap onto its own
+  // line, stranded alone — it stays glued to the word on either side.
+  const text = 'Emily Peng // "Pengus" //\npoet // moonlighting as a techie';
   const typed = document.getElementById("typed") as HTMLElement;
   const subline = document.getElementById("subline") as HTMLElement;
   const chonker = document.getElementById("chonker") as HTMLImageElement | null;
