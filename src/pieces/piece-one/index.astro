@@ -111,7 +111,7 @@ const rows = lines.map((line) => line.split("//").map((segment) => segment.trim(
      a time inside the larger one. Slower, bolder fade than the desktop
      cursor-reveal's snappier one. */
   .piece-one.touch-mode .segment {
-    transition: opacity 3s ease-out, filter 3s ease-out;
+    transition: opacity 2.1s ease-out, filter 2.1s ease-out;
   }
 
   .piece-one.touch-mode .segment.lit {
@@ -246,7 +246,7 @@ const rows = lines.map((line) => line.split("//").map((segment) => segment.trim(
       }
     }
 
-    const numSlots = 3; // lines lit at once — fewer than the 6 total, so most of the poem stays dark
+    const numSlots = 3 + Math.floor(Math.random() * 3); // 3-5 lines lit at once, mostly 3-4
     for (let i = 0; i < numSlots; i++) {
       setTimeout(runSlot, i * 900); // stagger starts so they don't sync up
     }
