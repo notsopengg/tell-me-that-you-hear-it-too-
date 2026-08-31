@@ -110,50 +110,51 @@ const rows = lines.map((line) => line.split("//").map((segment) => segment.trim(
      never a synchronized blink, never fully steady. */
   @keyframes segment-flicker {
     0% {
-      opacity: 0.15;
-      filter: blur(1.5px);
-    }
-    8% {
-      opacity: 0.55;
-      filter: blur(0.5px);
-    }
-    15% {
       opacity: 0.2;
       filter: blur(1.5px);
     }
+    8% {
+      opacity: 0.85;
+      filter: blur(0.5px);
+    }
+    15% {
+      opacity: 0.28;
+      filter: blur(1.5px);
+    }
     27% {
-      opacity: 0.65;
+      opacity: 0.95;
       filter: blur(0);
     }
     38% {
-      opacity: 0.18;
+      opacity: 0.24;
       filter: blur(1.5px);
     }
     50% {
-      opacity: 0.5;
+      opacity: 0.8;
       filter: blur(0.5px);
     }
     60% {
-      opacity: 0.15;
+      opacity: 0.2;
       filter: blur(2px);
     }
     72% {
-      opacity: 0.7;
+      opacity: 1;
       filter: blur(0);
     }
     85% {
-      opacity: 0.22;
+      opacity: 0.3;
       filter: blur(1.5px);
     }
     100% {
-      opacity: 0.15;
+      opacity: 0.2;
       filter: blur(1.5px);
     }
   }
 
   .segment.flicker {
+    font-weight: 700;
     animation-name: segment-flicker;
-    animation-timing-function: steps(1, end);
+    animation-timing-function: ease-in-out;
     animation-iteration-count: infinite;
   }
 
@@ -249,7 +250,7 @@ const rows = lines.map((line) => line.split("//").map((segment) => segment.trim(
   if (matchMedia("(hover: none)").matches) {
     for (const segment of segments) {
       segment.classList.add("flicker");
-      const duration = 2.2 + Math.random() * 2.6; // 2.2s - 4.8s, varies per segment
+      const duration = 5 + Math.random() * 4; // 5s - 9s, varies per segment
       const delay = -Math.random() * duration; // starts mid-cycle so segments desync immediately
       segment.style.animationDuration = `${duration}s`;
       segment.style.animationDelay = `${delay}s`;
